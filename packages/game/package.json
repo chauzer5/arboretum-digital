@@ -1,0 +1,20 @@
+{
+  "name": "@arboretum/game",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsgo -p tsconfig.json --noEmit",
+    "test": "bun test",
+    "typecheck": "tsgo -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "boardgame.io": "^0.50.2"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.3"
+  }
+}
+

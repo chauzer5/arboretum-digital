@@ -1,0 +1,23 @@
+{
+  "name": "arboretum-digital",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun --filter @arboretum/web dev",
+    "dev:web": "bun --filter @arboretum/web dev",
+    "dev:server": "bun --filter @arboretum/server dev",
+    "build": "bun --filter @arboretum/game build && bun --filter @arboretum/web build",
+    "test": "bun --filter @arboretum/game test",
+    "typecheck": "bun --filter @arboretum/game typecheck && bun --filter @arboretum/web typecheck && bun --filter @arboretum/server typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "@typescript/native-preview": "^7.0.0-dev.20260421.2",
+    "typescript": "^5.9.3"
+  }
+}

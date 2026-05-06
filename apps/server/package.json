@@ -1,0 +1,19 @@
+{
+  "name": "@arboretum/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/server.ts",
+    "start": "bun src/server.ts",
+    "typecheck": "tsgo -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@arboretum/game": "workspace:*",
+    "boardgame.io": "^0.50.2"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.3"
+  }
+}
+
