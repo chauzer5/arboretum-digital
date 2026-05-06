@@ -120,7 +120,8 @@ export const ArboretumGame = {
         step: "draw",
         drawsRemaining: 2
       },
-      endTriggered: false
+      endTriggered: false,
+      log: []
     };
   },
 
@@ -170,6 +171,7 @@ export const ArboretumGame = {
         if (ctx.G.deck.length === 0) {
           ctx.G.endTriggered = true;
         }
+        ctx.G.log.push({ playerID: ctx.playerID, kind: "draw-deck" });
         advanceDrawStep(ctx.G);
       }
     },
@@ -187,6 +189,12 @@ export const ArboretumGame = {
         if (!cardID) return INVALID_MOVE;
 
         ctx.G.players[ctx.playerID].hand.push(cardID);
+        ctx.G.log.push({
+          playerID: ctx.playerID,
+          kind: "draw-discard",
+          cardID,
+          fromPlayerID
+        });
         advanceDrawStep(ctx.G);
       }
     },
@@ -204,6 +212,7 @@ export const ArboretumGame = {
         player.hand.splice(cardIndex, 1);
         player.arboretum[coordKey(coord)] = cardID;
         ctx.G.turn.step = "discard";
+        ctx.G.log.push({ playerID: ctx.playerID, kind: "plant", cardID });
       }
     },
 
@@ -219,6 +228,7 @@ export const ArboretumGame = {
         player.hand.splice(cardIndex, 1);
         player.discard.push(cardID);
         ctx.G.turn.step = "review";
+        ctx.G.log.push({ playerID: ctx.playerID, kind: "discard", cardID });
       }
     },
 
@@ -229,8 +239,10 @@ export const ArboretumGame = {
         if (!isCurrentPlayer(ctx)) return INVALID_MOVE;
         if (ctx.G.turn.step !== "review") return INVALID_MOVE;
 
+        ctx.G.log.push({ playerID: ctx.playerID, kind: "end-turn" });
         if (ctx.G.endTriggered) {
           ctx.G.finalScores = scoreGame(ctx.G);
+          ctx.G.log.push({ playerID: ctx.playerID, kind: "game-end" });
           return;
         }
 

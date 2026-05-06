@@ -298,6 +298,55 @@ describe("end-to-end turn flow", () => {
   });
 });
 
+describe("game log", () => {
+  test("each move appends a log entry", () => {
+    const G = setupGame(2);
+    expect(G.log).toEqual([]);
+
+    getMove("drawFromDeck")(makeCtx(G, "0"));
+    expect(G.log).toEqual([{ playerID: "0", kind: "draw-deck" }]);
+
+    G.players["1"].discard = ["oak-3"];
+    G.cardsById["oak-3"] = { id: "oak-3", species: "oak", rank: 3 };
+    getMove("drawFromDiscard")(makeCtx(G, "0"), "1");
+    expect(G.log[1]).toMatchObject({
+      playerID: "0",
+      kind: "draw-discard",
+      cardID: "oak-3",
+      fromPlayerID: "1"
+    });
+
+    const cardToPlant = G.players["0"].hand[0];
+    getMove("plantCard")(makeCtx(G, "0"), cardToPlant, { x: 0, y: 0 });
+    expect(G.log[2]).toMatchObject({
+      playerID: "0",
+      kind: "plant",
+      cardID: cardToPlant
+    });
+
+    const cardToDiscard = G.players["0"].hand[0];
+    getMove("discardCard")(makeCtx(G, "0"), cardToDiscard);
+    expect(G.log[3]).toMatchObject({
+      playerID: "0",
+      kind: "discard",
+      cardID: cardToDiscard
+    });
+
+    getMove("endTurn")(makeCtx(G, "0"));
+    expect(G.log[4]).toEqual({ playerID: "0", kind: "end-turn" });
+  });
+
+  test("game-end entry follows the final endTurn", () => {
+    const G = setupGame(2);
+    G.turn = { step: "review", drawsRemaining: 0 };
+    G.endTriggered = true;
+    getMove("endTurn")(makeCtx(G, "0"));
+    expect(G.log).toHaveLength(2);
+    expect(G.log[0].kind).toBe("end-turn");
+    expect(G.log[1].kind).toBe("game-end");
+  });
+});
+
 describe("enumerateMoves", () => {
   test("returns no moves when it's not your turn", () => {
     const G = setupGame(2);

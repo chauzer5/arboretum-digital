@@ -71,6 +71,23 @@ export type FinalScores = {
   winners: PlayerID[];
 };
 
+export type LogEntryKind =
+  | "draw-deck"
+  | "draw-discard"
+  | "plant"
+  | "discard"
+  | "end-turn"
+  | "game-end";
+
+export type LogEntry = {
+  playerID: PlayerID;
+  kind: LogEntryKind;
+  /** Card identifier for plant/discard/draw-discard. */
+  cardID?: string;
+  /** Source player for draw-discard. */
+  fromPlayerID?: PlayerID;
+};
+
 export type ArboretumState = {
   cardsById: Record<string, Card>;
   deck: string[];
@@ -79,6 +96,7 @@ export type ArboretumState = {
   turn: TurnState;
   endTriggered: boolean;
   finalScores?: FinalScores;
+  log: LogEntry[];
 };
 
 export type ArboretumSetupData = {

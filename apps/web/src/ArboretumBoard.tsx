@@ -88,6 +88,7 @@ export function ArboretumBoard({ G, ctx, moves, playerID, isActive, undo }: Boar
           ? "hand"
           : null
       : null;
+  const [showLog, setShowLog] = useState(false);
 
   if (!seat || !seatPlayer) {
     return <div className="empty-state">Choose a player seat to view your hand.</div>;
@@ -124,19 +125,35 @@ export function ArboretumBoard({ G, ctx, moves, playerID, isActive, undo }: Boar
           >
             New game
           </button>
+          <button
+            type="button"
+            className="toolbar-button ghost"
+            onClick={() => setShowLog(true)}
+          >
+            Log
+          </button>
         </div>
       ) : null}
 
       <header className="status-bar">
         <div className="status-info">
           {ctx.gameover ? (
-            <button
-              type="button"
-              className="toolbar-button ghost"
-              onClick={session.exitToMenu}
-            >
-              New game
-            </button>
+            <div className="status-toolbar-buttons">
+              <button
+                type="button"
+                className="toolbar-button ghost"
+                onClick={session.exitToMenu}
+              >
+                New game
+              </button>
+              <button
+                type="button"
+                className="toolbar-button ghost"
+                onClick={() => setShowLog(true)}
+              >
+                Log
+              </button>
+            </div>
           ) : (
             <>
               <div>
@@ -307,6 +324,17 @@ export function ArboretumBoard({ G, ctx, moves, playerID, isActive, undo }: Boar
           ) : null}
         </AnimatePresence>
       </div>
+
+      <AnimatePresence>
+        {showLog ? (
+          <GameLogModal
+            key="log-modal"
+            G={G}
+            displayName={displayName}
+            onClose={() => setShowLog(false)}
+          />
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }
@@ -590,6 +618,89 @@ function DiscardPile({
       ) : null}
     </div>
   );
+}
+
+function GameLogModal({
+  G,
+  displayName,
+  onClose
+}: {
+  G: ArboretumState;
+  displayName: (id: string) => string;
+  onClose: () => void;
+}) {
+  const entries = G.log.slice().reverse(); // newest first
+
+  return (
+    <motion.div
+      className="rules-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="game-log-title"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+      onClick={onClose}
+    >
+      <motion.div
+        className="rules-modal-card game-log-modal"
+        initial={{ opacity: 0, y: 24, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: -12, scale: 0.97 }}
+        transition={{ type: "spring", stiffness: 280, damping: 26 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          className="rules-modal-close"
+          onClick={onClose}
+          aria-label="Close log"
+        >
+          ×
+        </button>
+        <h2 id="game-log-title">Game log</h2>
+        {entries.length === 0 ? (
+          <p className="potential-empty">Nothing has happened yet.</p>
+        ) : (
+          <p className="game-log-note">Most recent <span aria-hidden="true">↑</span></p>
+        )}
+        {entries.length === 0 ? null : (
+          <ol className="game-log-list">
+            {entries.map((entry, i) => (
+              <li className="game-log-row" key={entries.length - 1 - i}>
+                <strong>{displayName(entry.playerID)}</strong>
+                <span>{describeLogEntry(G, entry)}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function describeLogEntry(G: ArboretumState, entry: ArboretumState["log"][number]): string {
+  const cardLabel = (id?: string) => {
+    if (!id) return "";
+    const card = G.cardsById[id];
+    if (!card) return "a card";
+    return `${card.rank} ${SPECIES_BY_ID[card.species].commonName}`;
+  };
+  switch (entry.kind) {
+    case "draw-deck":
+      return "drew from the deck";
+    case "draw-discard":
+      return `took ${cardLabel(entry.cardID)} from a discard pile`;
+    case "plant":
+      return `planted ${cardLabel(entry.cardID)}`;
+    case "discard":
+      return `discarded ${cardLabel(entry.cardID)}`;
+    case "end-turn":
+      return "ended their turn";
+    case "game-end":
+      return "— game over";
+  }
 }
 
 function PotentialScore({ G, playerID }: { G: ArboretumState; playerID: PlayerID }) {

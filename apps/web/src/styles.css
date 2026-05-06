@@ -606,6 +606,51 @@ button:disabled {
   font-size: 0.9rem;
 }
 
+.game-log-modal {
+  max-height: min(80vh, 600px);
+  display: flex;
+  flex-direction: column;
+}
+
+.game-log-note {
+  margin: 0;
+  color: #6d756c;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.game-log-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid #d7cab9;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fffaf0;
+}
+
+.game-log-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: #2d4633;
+}
+
+.game-log-row strong {
+  color: #17241d;
+}
+
+.status-toolbar-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .rules-demo-row {
   display: flex;
   justify-content: center;

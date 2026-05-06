@@ -252,7 +252,8 @@ function testStateForPlayers(playerIDs: string[], extraCards: Card[]): Arboretum
       step: "draw",
       drawsRemaining: 2
     },
-    endTriggered: false
+    endTriggered: false,
+    log: []
   };
 }
 

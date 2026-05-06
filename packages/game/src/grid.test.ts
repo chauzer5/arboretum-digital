@@ -81,7 +81,8 @@ describe("speciesPresentCount", () => {
         }
       },
       turn: { step: "draw", drawsRemaining: 2 },
-      endTriggered: false
+      endTriggered: false,
+      log: []
     };
 
     expect(speciesPresentCount(state, "0")).toBe(2);
@@ -94,7 +95,8 @@ describe("speciesPresentCount", () => {
       speciesInGame: [],
       players: {},
       turn: { step: "draw", drawsRemaining: 2 },
-      endTriggered: false
+      endTriggered: false,
+      log: []
     };
     expect(speciesPresentCount(state, "0")).toBe(0);
   });

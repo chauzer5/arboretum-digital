@@ -24,6 +24,8 @@ export type {
   Card,
   Coord,
   FinalScores,
+  LogEntry,
+  LogEntryKind,
   PathScore,
   PlayerID,
   PlayerState,
