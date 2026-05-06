@@ -24,6 +24,7 @@ export function ArboretumBoard({ G, ctx, moves, playerID, isActive, undo }: Boar
   const session = useSession();
   const { requestHandoff } = session;
   const [selectedCardID, setSelectedCardID] = useState<string | null>(null);
+  const [drawnCard, setDrawnCard] = useState<Card | null>(null);
 
   const prevCurrentPlayer = useRef(ctx.currentPlayer);
   useEffect(() => {
@@ -36,6 +37,29 @@ export function ArboretumBoard({ G, ctx, moves, playerID, isActive, undo }: Boar
     }
     prevCurrentPlayer.current = ctx.currentPlayer;
   }, [ctx.currentPlayer, ctx.gameover, G.players, requestHandoff]);
+
+  // Detect newly-drawn cards in the seat-holder's hand to play a brief reveal.
+  const seatHand = playerID ? G.players[playerID]?.hand : undefined;
+  const prevHandRef = useRef<string[] | undefined>(seatHand);
+  useEffect(() => {
+    const prev = prevHandRef.current ?? [];
+    const curr = seatHand ?? [];
+    if (curr.length > prev.length) {
+      const newIDs = curr.filter((id) => !prev.includes(id));
+      const lastID = newIDs[newIDs.length - 1];
+      const card = lastID ? G.cardsById[lastID] : undefined;
+      if (card && card.id !== HIDDEN_CARD_ID) {
+        setDrawnCard(card);
+      }
+    }
+    prevHandRef.current = curr;
+  }, [seatHand, G.cardsById]);
+
+  useEffect(() => {
+    if (!drawnCard) return;
+    const t = setTimeout(() => setDrawnCard(null), 1100);
+    return () => clearTimeout(t);
+  }, [drawnCard]);
   const seat = playerID && G.players[playerID] ? playerID : undefined;
   const seatPlayer = seat ? G.players[seat] : undefined;
   const canAct = Boolean(isActive && seat);
@@ -116,25 +140,6 @@ export function ArboretumBoard({ G, ctx, moves, playerID, isActive, undo }: Boar
               <div>
                 <span className="eyebrow">Step</span>
                 <strong>{stepLabel(G.turn.step, G.turn.drawsRemaining)}</strong>
-              </div>
-              <div className="turn-actions">
-                <button
-                  type="button"
-                  className="turn-action-button ghost"
-                  disabled={!canUndo}
-                  onClick={() => undo()}
-                >
-                  Undo
-                </button>
-                {canEndTurn ? (
-                  <button
-                    type="button"
-                    className="turn-action-button primary"
-                    onClick={() => moves.endTurn()}
-                  >
-                    {G.endTriggered ? "End game" : "End turn"}
-                  </button>
-                ) : null}
               </div>
             </>
           )}
@@ -256,6 +261,44 @@ export function ArboretumBoard({ G, ctx, moves, playerID, isActive, undo }: Boar
           </div>
         </section>
       ) : null}
+
+      {canAct && !ctx.gameover ? (
+        <div className="action-footer">
+          <button
+            type="button"
+            className="turn-action-button ghost"
+            disabled={!canUndo}
+            onClick={() => undo()}
+          >
+            Undo
+          </button>
+          <button
+            type="button"
+            className="turn-action-button primary"
+            disabled={!canEndTurn}
+            onClick={() => moves.endTurn()}
+          >
+            {G.endTriggered ? "End game" : "End turn"}
+          </button>
+        </div>
+      ) : null}
+
+      <div className="drawn-card-overlay" aria-hidden="true">
+        <AnimatePresence>
+          {drawnCard ? (
+            <motion.div
+              key={drawnCard.id}
+              className="drawn-card-overlay-card"
+              initial={{ opacity: 0, scale: 0.4, rotateY: 90 }}
+              animate={{ opacity: 1, scale: 1, rotateY: 0 }}
+              exit={{ opacity: 0, scale: 0.55, y: 220 }}
+              transition={{ type: "spring", stiffness: 220, damping: 22 }}
+            >
+              <CardView card={drawnCard} />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

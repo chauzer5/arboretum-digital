@@ -43,7 +43,49 @@ button:disabled {
 
 .game-shell {
   min-height: 100vh;
-  padding: 20px;
+  padding: 20px 20px calc(80px + env(safe-area-inset-bottom));
+}
+
+.action-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: rgba(244, 240, 231, 0.94);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid #d7cab9;
+  box-shadow: 0 -2px 8px rgba(45, 70, 51, 0.08);
+}
+
+.action-footer .turn-action-button {
+  min-width: 110px;
+}
+
+.drawn-card-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  perspective: 1200px;
+}
+
+.drawn-card-overlay-card {
+  width: 140px;
+  aspect-ratio: 5 / 7;
+  filter: drop-shadow(0 12px 24px rgba(45, 70, 51, 0.35));
+}
+
+@media (max-width: 480px) {
+  .drawn-card-overlay-card {
+    width: 110px;
+  }
 }
 
 .menu-shell {
