@@ -66,6 +66,91 @@ button:disabled {
   min-width: 110px;
 }
 
+.potential-pill-container {
+  position: relative;
+  margin-left: auto;
+}
+
+.potential-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  border: 1px solid #b8ac9c;
+  border-radius: 999px;
+  padding: 5px 12px;
+  background: #fffaf0;
+  color: #2d4633;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.potential-pill strong {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  color: #d99c2c;
+}
+
+.potential-pill:hover,
+.potential-pill.open {
+  background: #ece4d7;
+  border-color: #2d4633;
+}
+
+.potential-breakdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  gap: 8px;
+  min-width: 240px;
+  border: 1px solid #d7cab9;
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #fffaf0;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14);
+}
+
+.potential-breakdown-note {
+  margin: 0;
+  color: #6d756c;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.potential-empty {
+  margin: 0;
+  color: #8a8170;
+  font-size: 0.85rem;
+}
+
+.potential-rows {
+  display: grid;
+  gap: 6px;
+}
+
+.potential-row {
+  display: grid;
+  grid-template-columns: 12px 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.potential-row-meta {
+  color: #6d756c;
+  font-size: 0.75rem;
+}
+
+.potential-row-score {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: #2d4633;
+  min-width: 24px;
+  text-align: right;
+}
+
 .drawn-card-overlay {
   position: fixed;
   inset: 0;

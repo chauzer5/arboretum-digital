@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   HIDDEN_CARD_ID,
   SPECIES_BY_ID,
+  bestPathForSpecies,
   coordKey,
   legalPlacementCoords,
   parseCoordKey,
@@ -219,6 +220,7 @@ export function ArboretumBoard({ G, ctx, moves, playerID, isActive, undo }: Boar
             ) : G.turn.step === "plant" && canAct ? (
               <span className="hint">Pick a card from your hand to plant</span>
             ) : null}
+            <PotentialScore G={G} playerID={seat} />
           </div>
 
           <ArboretumGrid
@@ -584,6 +586,78 @@ function DiscardPile({
               </div>
             ))
             .reverse()}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PotentialScore({ G, playerID }: { G: ArboretumState; playerID: PlayerID }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handle = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [open]);
+
+  const seatArboretum = G.players[playerID]?.arboretum;
+  const data = useMemo(() => {
+    if (!seatArboretum) return { total: 0, perSpecies: [] };
+    const perSpecies = G.speciesInGame
+      .map((species) => {
+        const path = bestPathForSpecies(G, playerID, species);
+        return { species, score: path.score, length: path.path.length };
+      })
+      .filter((s) => s.score > 0)
+      .sort((a, b) => b.score - a.score);
+    const total = perSpecies.reduce((sum, s) => sum + s.score, 0);
+    return { total, perSpecies };
+  }, [G, playerID, seatArboretum]);
+
+  return (
+    <div className="potential-pill-container" ref={containerRef}>
+      <button
+        type="button"
+        className={open ? "potential-pill open" : "potential-pill"}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label={`Your potential score: ${data.total} points. ${open ? "Hide" : "Show"} breakdown.`}
+      >
+        Potential: <strong>{data.total}</strong> pts
+      </button>
+      {open ? (
+        <div className="potential-breakdown" role="dialog">
+          <p className="potential-breakdown-note">
+            What you'd score if you won the rights to every species.
+          </p>
+          {data.perSpecies.length === 0 ? (
+            <p className="potential-empty">No scoring paths yet.</p>
+          ) : (
+            <div className="potential-rows">
+              {data.perSpecies.map(({ species, score, length }) => (
+                <div className="potential-row" key={species}>
+                  <span
+                    className="species-swatch"
+                    style={{ "--species-color": SPECIES_BY_ID[species].color } as CSSProperties}
+                  />
+                  <span className="potential-row-name">
+                    {SPECIES_BY_ID[species].commonName}
+                  </span>
+                  <span className="potential-row-meta">
+                    {length} card{length === 1 ? "" : "s"}
+                  </span>
+                  <strong className="potential-row-score">{score}</strong>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : null}
     </div>
