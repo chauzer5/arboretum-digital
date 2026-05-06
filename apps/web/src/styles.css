@@ -740,6 +740,17 @@ button:disabled {
   gap: 30px;
   flex-wrap: wrap;
   justify-content: flex-end;
+  padding: 10px 14px;
+  border-radius: 12px;
+  transition: box-shadow 0.3s ease, background 0.3s ease, transform 0.3s ease;
+}
+
+.piles-bar.is-active,
+.hand.is-active {
+  background: #fffaf0;
+  box-shadow:
+    0 8px 22px rgba(45, 70, 51, 0.16),
+    0 2px 6px rgba(45, 70, 51, 0.1);
 }
 
 .pile {
@@ -1162,6 +1173,9 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
   gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  transition: box-shadow 0.3s ease, background 0.3s ease;
 }
 
 @media (max-width: 720px) {
@@ -1256,6 +1270,18 @@ button:disabled {
   font-weight: 800;
   line-height: 1.1;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+@media (max-width: 720px) {
+  .hand .species {
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .hand .species {
+    font-size: 0.6rem;
+  }
 }
 
 .final-scores {
@@ -1431,6 +1457,10 @@ button:disabled {
     width: 42px;
   }
 
+  .pile-card-empty {
+    font-size: 0.6rem;
+  }
+
   .pile-label {
     font-size: 0.65rem;
     max-width: 84px;
@@ -1461,6 +1491,10 @@ button:disabled {
   .pile-card-button,
   .pile-card-empty {
     width: 38px;
+  }
+
+  .pile-card-empty {
+    font-size: 0.55rem;
   }
 }
 

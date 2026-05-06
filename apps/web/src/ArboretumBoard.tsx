@@ -49,6 +49,14 @@ export function ArboretumBoard({ G, ctx, moves, playerID, isActive, undo }: Boar
   const canUndo =
     canAct && !ctx.gameover && (G.turn.step === "discard" || G.turn.step === "review");
   const canEndTurn = canAct && !ctx.gameover && G.turn.step === "review";
+  const activeArea: "piles" | "hand" | null =
+    canAct && !ctx.gameover
+      ? G.turn.step === "draw"
+        ? "piles"
+        : G.turn.step === "plant" || G.turn.step === "discard"
+          ? "hand"
+          : null
+      : null;
 
   if (!seat || !seatPlayer) {
     return <div className="empty-state">Choose a player seat to view your hand.</div>;
@@ -132,7 +140,10 @@ export function ArboretumBoard({ G, ctx, moves, playerID, isActive, undo }: Boar
           )}
         </div>
 
-        <div className="piles-bar" aria-label="Draw piles">
+        <div
+          className={activeArea === "piles" ? "piles-bar is-active" : "piles-bar"}
+          aria-label="Draw piles"
+        >
           <button
             className="pile deck-pile"
             type="button"
@@ -218,7 +229,7 @@ export function ArboretumBoard({ G, ctx, moves, playerID, isActive, undo }: Boar
               <h2>Your hand</h2>
               <span>{seatPlayer.hand.length} cards</span>
             </div>
-            <div className="hand">
+            <div className={activeArea === "hand" ? "hand is-active" : "hand"}>
               <AnimatePresence mode="popLayout">
                 {seatPlayer.hand.map((cardID) => {
                   const card = G.cardsById[cardID];
