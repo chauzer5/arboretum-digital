@@ -39,12 +39,17 @@ export function ArboretumBoard({ G, ctx, moves, playerID, isActive, undo }: Boar
   }, [ctx.currentPlayer, ctx.gameover, G.players, requestHandoff]);
 
   // Detect newly-drawn cards in the seat-holder's hand to play a brief reveal.
+  // Gated by drawsRemaining decreasing, which catches both of the turn's two
+  // draws (the second one has already transitioned step → "plant" by the time
+  // the effect runs) while skipping undo and turn-rotation churn.
   const seatHand = playerID ? G.players[playerID]?.hand : undefined;
   const prevHandRef = useRef<string[] | undefined>(seatHand);
+  const prevDrawsRef = useRef<number>(G.turn.drawsRemaining);
   useEffect(() => {
     const prev = prevHandRef.current ?? [];
     const curr = seatHand ?? [];
-    if (curr.length > prev.length) {
+    const drewACard = G.turn.drawsRemaining < prevDrawsRef.current;
+    if (drewACard && curr.length > prev.length) {
       const newIDs = curr.filter((id) => !prev.includes(id));
       const lastID = newIDs[newIDs.length - 1];
       const card = lastID ? G.cardsById[lastID] : undefined;
@@ -53,7 +58,8 @@ export function ArboretumBoard({ G, ctx, moves, playerID, isActive, undo }: Boar
       }
     }
     prevHandRef.current = curr;
-  }, [seatHand, G.cardsById]);
+    prevDrawsRef.current = G.turn.drawsRemaining;
+  }, [seatHand, G.cardsById, G.turn.drawsRemaining]);
 
   useEffect(() => {
     if (!drawnCard) return;

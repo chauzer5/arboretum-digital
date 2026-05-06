@@ -1,5 +1,6 @@
 import { Bot } from "boardgame.io/ai";
 import { coordKey } from "./grid";
+import { adjustedHandSums, bestPathForSpecies } from "./scoring";
 import type { ArboretumState, Card, Coord, PlayerID, SpeciesId } from "./types";
 
 export type Difficulty = "easy" | "medium" | "hard";
@@ -45,9 +46,14 @@ export class ArboretumBot extends Bot {
       throw new Error("ArboretumBot.play: no legal actions");
     }
 
+    const G = state.G as ArboretumState;
+    const useLookahead = this.difficulty === "hard";
+
     const scored = actions.map((action) => ({
       action,
-      score: scoreAction(state.G as ArboretumState, playerID, action)
+      score: useLookahead
+        ? scoreActionWithLookahead(G, playerID, action)
+        : scoreAction(G, playerID, action)
     }));
     scored.sort((a, b) => b.score - a.score);
 
@@ -186,6 +192,177 @@ function helpsOpponent(G: ArboretumState, myID: PlayerID, card: Card): boolean {
   return false;
 }
 
+// --- Hard difficulty: 1-ply lookahead -------------------------------------
+
+/**
+ * Score a candidate action by simulating its effect and evaluating the
+ * resulting position. For moves with hidden outcomes (drawFromDeck), we fall
+ * back to a baseline computed from the current position.
+ */
+function scoreActionWithLookahead(
+  G: ArboretumState,
+  playerID: PlayerID,
+  action: BotAction
+): number {
+  if (action.type === "GAME_EVENT") return positionValue(G, playerID);
+  const moveName = action.payload.type;
+  const args = action.payload.args ?? [];
+
+  const simulated = simulateMove(G, playerID, moveName, args);
+  if (simulated === null) {
+    // drawFromDeck — we can't see the card we'd draw, so estimate the value
+    // of "having one more random card" with a small positive baseline.
+    if (moveName === "drawFromDeck") return positionValue(G, playerID) + 1.0;
+    return scoreAction(G, playerID, action);
+  }
+  return positionValue(simulated, playerID);
+}
+
+function simulateMove(
+  G: ArboretumState,
+  playerID: PlayerID,
+  moveName: string,
+  args: unknown[]
+): ArboretumState | null {
+  const player = G.players[playerID];
+  if (!player) return null;
+
+  switch (moveName) {
+    case "drawFromDeck":
+      return null; // hidden info; caller falls back to baseline
+    case "drawFromDiscard": {
+      const fromPlayerID = args[0] as PlayerID;
+      const source = G.players[fromPlayerID];
+      if (!source || source.discard.length === 0) return null;
+      const topID = source.discard[source.discard.length - 1];
+
+      if (fromPlayerID === playerID) {
+        // Own discard pile → both updates apply to the same player object
+        return {
+          ...G,
+          players: {
+            ...G.players,
+            [playerID]: {
+              ...player,
+              hand: [...player.hand, topID],
+              discard: player.discard.slice(0, -1)
+            }
+          }
+        };
+      }
+      return {
+        ...G,
+        players: {
+          ...G.players,
+          [fromPlayerID]: {
+            ...source,
+            discard: source.discard.slice(0, -1)
+          },
+          [playerID]: {
+            ...player,
+            hand: [...player.hand, topID]
+          }
+        }
+      };
+    }
+    case "plantCard": {
+      const cardID = args[0] as string;
+      const coord = args[1] as Coord;
+      const idx = player.hand.indexOf(cardID);
+      if (idx === -1) return null;
+      const newHand = player.hand.slice();
+      newHand.splice(idx, 1);
+      return {
+        ...G,
+        players: {
+          ...G.players,
+          [playerID]: {
+            ...player,
+            hand: newHand,
+            arboretum: { ...player.arboretum, [coordKey(coord)]: cardID }
+          }
+        }
+      };
+    }
+    case "discardCard": {
+      const cardID = args[0] as string;
+      const idx = player.hand.indexOf(cardID);
+      if (idx === -1) return null;
+      const newHand = player.hand.slice();
+      newHand.splice(idx, 1);
+      return {
+        ...G,
+        players: {
+          ...G.players,
+          [playerID]: {
+            ...player,
+            hand: newHand,
+            discard: [...player.discard, cardID]
+          }
+        }
+      };
+    }
+    case "endTurn":
+      return G;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Position evaluation: my expected scoring (best path × probability of
+ * holding scoring rights) minus a fraction of each opponent's expected
+ * scoring. Sums across all species in the game.
+ */
+function positionValue(G: ArboretumState, playerID: PlayerID): number {
+  const ids = Object.keys(G.players);
+  let value = 0;
+
+  for (const species of G.speciesInGame) {
+    const myPath = bestPathForSpecies(G, playerID, species).score;
+    const myProb = scoringRightsProbability(G, playerID, species);
+    value += myPath * myProb;
+
+    for (const otherID of ids) {
+      if (otherID === playerID) continue;
+      const oppPath = bestPathForSpecies(G, otherID, species).score;
+      const oppProb = scoringRightsProbability(G, otherID, species);
+      // Penalize opponent threats — but less heavily than rewarding our own
+      // scoring, so the bot prioritizes building its game over blocking.
+      value -= oppPath * oppProb * 0.4;
+    }
+  }
+
+  return value;
+}
+
+/**
+ * Heuristic probability that `playerID` will hold scoring rights for
+ * `species` given the current hand sums. Treats clear leads as ~certain,
+ * ties as shared, and trailing as ~impossible (a coarse approximation that
+ * captures the dominant strategic dynamic without modeling future draws).
+ */
+function scoringRightsProbability(
+  G: ArboretumState,
+  playerID: PlayerID,
+  species: SpeciesId
+): number {
+  const sums = adjustedHandSums(G, species);
+  const ids = Object.keys(G.players);
+
+  const allZero = ids.every((id) => (sums[id] ?? 0) === 0);
+  if (allZero) return 1.0; // no one holds the species → everyone scores it
+
+  const mySum = sums[playerID] ?? 0;
+  if (mySum === 0) return 0.0;
+
+  const max = Math.max(...ids.map((id) => sums[id] ?? 0));
+  if (mySum < max) return 0.0;
+
+  const tied = ids.filter((id) => (sums[id] ?? 0) === max).length;
+  return 1.0 / tied;
+}
+
 // --- per-move heuristics ---
 
 function scoreDrawFromDeck(_G: ArboretumState, _playerID: PlayerID): number {
@@ -238,33 +415,54 @@ function scorePlant(
   if (!player) return -Infinity;
 
   const isFirst = Object.keys(player.arboretum).length === 0;
-  let score = 0;
-
   if (isFirst) {
-    // No adjacency benefit possible. Slight preference for low ranks (path starts).
-    if (card.rank <= 3) score += 1;
+    // No adjacency, no paths possible. Slight preference for low ranks
+    // (rank-1s start great paths and gain the start-bonus).
+    let score = 0.5;
+    if (card.rank <= 3) score += 0.5;
     return score;
   }
 
+  // Simulate the plant: build a G with this card placed at coord and re-run
+  // bestPathForSpecies to see whether the plant actually grows a scoring path.
+  const simulatedG: ArboretumState = {
+    ...G,
+    players: {
+      ...G.players,
+      [playerID]: {
+        ...player,
+        arboretum: { ...player.arboretum, [coordKey(coord)]: cardID }
+      }
+    }
+  };
+
+  // Recompute paths only for species that could possibly be affected: the
+  // planted card's species (it's a path endpoint candidate) and any adjacent
+  // species (the plant could become an interior step in their paths).
   const adjacent = getAdjacentCards(G, playerID, coord);
-  const sameSpecies = adjacent.filter((c) => c.species === card.species);
-  const lowerRank = adjacent.filter((c) => c.rank < card.rank);
-  const higherRank = adjacent.filter((c) => c.rank > card.rank);
-
-  // Connecting same-species: highest-impact heuristic
-  score += sameSpecies.length * 3;
-  // Rank fits into ascending paths (any species, any direction)
-  score += Math.min(lowerRank.length, 2) * 1.5;
-  score += Math.min(higherRank.length, 2) * 1.5;
-
-  // Special positions
-  if (card.rank === 1 && hasSpeciesPlanted(G, playerID, card.species)) score += 1;
-  if (card.rank === 8 && hasSpeciesPlanted(G, playerID, card.species)) score += 1;
-
-  // Discourage planting that connects to nothing useful (the only legal-but-wasteful play)
-  if (sameSpecies.length === 0 && lowerRank.length === 0 && higherRank.length === 0) {
-    score -= 1;
+  const relevantSpecies = new Set<SpeciesId>([card.species]);
+  for (const adj of adjacent) {
+    relevantSpecies.add(adj.species);
   }
+
+  let pathDelta = 0;
+  for (const species of relevantSpecies) {
+    const before = bestPathForSpecies(G, playerID, species).score;
+    const after = bestPathForSpecies(simulatedG, playerID, species).score;
+    const weight = species === card.species ? 4 : 2;
+    pathDelta += (after - before) * weight;
+  }
+
+  let score = pathDelta;
+
+  // Small bonuses for cards that set up future scoring (start/end bonuses).
+  if (card.rank === 1 && hasSpeciesPlanted(G, playerID, card.species)) score += 0.5;
+  if (card.rank === 8 && hasSpeciesPlanted(G, playerID, card.species)) score += 0.5;
+
+  // Slight nudge to keep the arboretum compact: connecting at all beats
+  // being adjacent to nothing (legal placements that touch only opponents'
+  // dead zones).
+  if (adjacent.length > 0) score += 0.2;
 
   return score;
 }
