@@ -43,7 +43,11 @@ button:disabled {
 
 .game-shell {
   min-height: 100vh;
-  padding: 20px 20px calc(80px + env(safe-area-inset-bottom));
+  padding:
+    calc(20px + env(safe-area-inset-top))
+    calc(20px + env(safe-area-inset-right))
+    calc(80px + env(safe-area-inset-bottom))
+    calc(20px + env(safe-area-inset-left));
 }
 
 .action-footer {
@@ -177,7 +181,11 @@ button:disabled {
   display: grid;
   place-items: center;
   min-height: 100vh;
-  padding: 24px;
+  padding:
+    calc(24px + env(safe-area-inset-top))
+    calc(24px + env(safe-area-inset-right))
+    calc(24px + env(safe-area-inset-bottom))
+    calc(24px + env(safe-area-inset-left));
   background: #23362d;
 }
 
@@ -471,7 +479,11 @@ button:disabled {
   z-index: 100;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding:
+    calc(24px + env(safe-area-inset-top))
+    calc(24px + env(safe-area-inset-right))
+    calc(24px + env(safe-area-inset-bottom))
+    calc(24px + env(safe-area-inset-left));
   background: #17241d;
 }
 
@@ -515,7 +527,11 @@ button:disabled {
   z-index: 200;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding:
+    calc(24px + env(safe-area-inset-top))
+    calc(24px + env(safe-area-inset-right))
+    calc(24px + env(safe-area-inset-bottom))
+    calc(24px + env(safe-area-inset-left));
   background: rgba(23, 36, 29, 0.92);
   overflow-y: auto;
 }
