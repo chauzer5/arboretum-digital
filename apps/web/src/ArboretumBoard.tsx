@@ -670,7 +670,7 @@ function GameLogModal({
             {entries.map((entry, i) => (
               <li className="game-log-row" key={entries.length - 1 - i}>
                 <strong>{displayName(entry.playerID)}</strong>
-                <span>{describeLogEntry(G, entry)}</span>
+                <span>{describeLogEntry(G, entry, displayName)}</span>
               </li>
             ))}
           </ol>
@@ -680,7 +680,11 @@ function GameLogModal({
   );
 }
 
-function describeLogEntry(G: ArboretumState, entry: ArboretumState["log"][number]): string {
+function describeLogEntry(
+  G: ArboretumState,
+  entry: ArboretumState["log"][number],
+  displayName: (id: string) => string
+): string {
   const cardLabel = (id?: string) => {
     if (!id) return "";
     const card = G.cardsById[id];
@@ -690,8 +694,13 @@ function describeLogEntry(G: ArboretumState, entry: ArboretumState["log"][number
   switch (entry.kind) {
     case "draw-deck":
       return "drew from the deck";
-    case "draw-discard":
-      return `took ${cardLabel(entry.cardID)} from a discard pile`;
+    case "draw-discard": {
+      const source =
+        entry.fromPlayerID === entry.playerID
+          ? "their own discard pile"
+          : `${displayName(entry.fromPlayerID ?? "")}'s discard pile`;
+      return `took ${cardLabel(entry.cardID)} from ${source}`;
+    }
     case "plant":
       return `planted ${cardLabel(entry.cardID)}`;
     case "discard":
