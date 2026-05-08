@@ -60,7 +60,7 @@ function nextBotName(players: PlayerSetup[], excludeIndex: number): string {
 export function MainMenu({ onPassAndPlay }: { onPassAndPlay: () => void }) {
   const [showRules, setShowRules] = useState(false);
   return (
-    <main className="menu-shell">
+    <main className="menu-shell menu-shell--locked">
       <div className="menu-card">
         <h1>Arboretum</h1>
         <p className="menu-subtitle">A digital tabletop prototype</p>

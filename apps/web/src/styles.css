@@ -189,6 +189,14 @@ button:disabled {
   background: #23362d;
 }
 
+.menu-shell--locked {
+  min-height: 0;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
 .menu-card {
   width: 100%;
   max-width: 460px;
