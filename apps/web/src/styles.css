@@ -1126,12 +1126,6 @@ button:disabled {
   aspect-ratio: 5 / 7;
 }
 
-.opponent-hand-card.cancelled .card .rank {
-  text-decoration: line-through;
-  text-decoration-thickness: 2px;
-  text-decoration-color: rgba(255, 250, 240, 0.85);
-}
-
 .cancelled-badge {
   position: absolute;
   top: -5px;
