@@ -7,6 +7,7 @@ import {
   SPECIES_BY_ID,
   bestPathForSpecies,
   coordKey,
+  isEightCancelled,
   legalPlacementCoords,
   parseCoordKey,
   pointsPerCard,
@@ -388,11 +389,26 @@ function OpponentTable({
       )}
       {revealHand && player.hand.length > 0 ? (
         <div className="opponent-hand" aria-label={`${displayName}'s final hand`}>
-          {player.hand.map((cardID) => (
-            <div className="opponent-hand-card" key={cardID}>
-              <CardView card={G.cardsById[cardID]} compact showName={false} />
-            </div>
-          ))}
+          {player.hand.map((cardID) => {
+            const cancelled = isEightCancelled(G, playerID, cardID);
+            return (
+              <div
+                className={cancelled ? "opponent-hand-card cancelled" : "opponent-hand-card"}
+                key={cardID}
+              >
+                <CardView card={G.cardsById[cardID]} compact showName={false} />
+                {cancelled ? (
+                  <span
+                    className="cancelled-badge"
+                    aria-label="Cancelled by an opponent's 1"
+                    title="Cancelled by an opponent's 1"
+                  >
+                    ✕
+                  </span>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </article>

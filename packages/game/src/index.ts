@@ -13,6 +13,7 @@ export {
 export {
   adjustedHandSums,
   bestPathForSpecies,
+  isEightCancelled,
   pointsPerCard,
   scoreGame,
   scorePath,

@@ -9,6 +9,28 @@ import type {
   SpeciesScore
 } from "./types";
 
+/**
+ * Returns true if `cardID` is a rank-8 card whose hand-sum value has been
+ * cancelled to 0 by some other player holding the rank-1 of the same species.
+ */
+export function isEightCancelled(
+  state: ArboretumState,
+  playerID: PlayerID,
+  cardID: string
+): boolean {
+  const card = state.cardsById[cardID];
+  if (!card || card.rank !== 8) return false;
+  for (const [otherID, other] of Object.entries(state.players)) {
+    if (otherID === playerID) continue;
+    const hasOne = other.hand.some((id) => {
+      const c = state.cardsById[id];
+      return c?.species === card.species && c.rank === 1;
+    });
+    if (hasOne) return true;
+  }
+  return false;
+}
+
 export function adjustedHandSums(
   state: ArboretumState,
   species: SpeciesId
