@@ -1,5 +1,5 @@
 import { Bot } from "boardgame.io/ai";
-import { coordKey } from "./grid";
+import { coordKey, legalPlacementCoords } from "./grid";
 import { adjustedHandSums, bestPathForSpecies } from "./scoring";
 import type { ArboretumState, Card, Coord, PlayerID, SpeciesId } from "./types";
 
@@ -195,9 +195,13 @@ function helpsOpponent(G: ArboretumState, myID: PlayerID, card: Card): boolean {
 // --- Hard difficulty: 1-ply lookahead -------------------------------------
 
 /**
- * Score a candidate action by simulating its effect and evaluating the
- * resulting position. For moves with hidden outcomes (drawFromDeck), we fall
- * back to a baseline computed from the current position.
+ * Score a candidate action with 2-ply lookahead: simulate my move, then
+ * simulate each opponent's best plant in turn order, then evaluate the
+ * resulting position from my perspective. Captures threats like "if I plant
+ * here, my next opponent will grab the discard and finish their path."
+ *
+ * For moves with hidden outcomes (drawFromDeck), we fall back to a baseline
+ * computed from the current position.
  */
 function scoreActionWithLookahead(
   G: ArboretumState,
@@ -215,7 +219,53 @@ function scoreActionWithLookahead(
     if (moveName === "drawFromDeck") return positionValue(G, playerID) + 1.0;
     return scoreAction(G, playerID, action);
   }
-  return positionValue(simulated, playerID);
+
+  // 2-ply: anticipate each opponent's best plant in turn order.
+  let state: ArboretumState = simulated;
+  const ids = Object.keys(state.players);
+  const myIdx = Number(playerID);
+  for (let offset = 1; offset < ids.length; offset += 1) {
+    const opponentID = String((myIdx + offset) % ids.length);
+    const afterOpp = simulateBestOpponentPlant(state, opponentID);
+    if (afterOpp !== null) state = afterOpp;
+  }
+
+  return positionValue(state, playerID);
+}
+
+/**
+ * Find the opponent's plant that most increases their own positionValue and
+ * return the resulting state. Returns null if they can't plant (no hand or
+ * no legal coords).
+ */
+function simulateBestOpponentPlant(
+  G: ArboretumState,
+  opponentID: PlayerID
+): ArboretumState | null {
+  const player = G.players[opponentID];
+  if (!player || player.hand.length === 0) return null;
+
+  const isFirst = Object.keys(player.arboretum).length === 0;
+  const coords = isFirst ? [{ x: 0, y: 0 }] : legalPlacementCoords(player.arboretum);
+  if (coords.length === 0) return null;
+
+  const uniqueCards = Array.from(new Set(player.hand));
+  let bestState: ArboretumState | null = null;
+  let bestValue = -Infinity;
+
+  for (const cardID of uniqueCards) {
+    for (const coord of coords) {
+      const next = simulateMove(G, opponentID, "plantCard", [cardID, coord]);
+      if (!next) continue;
+      const value = positionValue(next, opponentID);
+      if (value > bestValue) {
+        bestValue = value;
+        bestState = next;
+      }
+    }
+  }
+
+  return bestState;
 }
 
 function simulateMove(
@@ -311,8 +361,8 @@ function simulateMove(
 
 /**
  * Position evaluation: my expected scoring (best path × probability of
- * holding scoring rights) minus a fraction of each opponent's expected
- * scoring. Sums across all species in the game.
+ * holding scoring rights) plus discounted hand-potential, minus a fraction
+ * of each opponent's expected scoring. Sums across all species in the game.
  */
 function positionValue(G: ArboretumState, playerID: PlayerID): number {
   const ids = Object.keys(G.players);
@@ -320,8 +370,13 @@ function positionValue(G: ArboretumState, playerID: PlayerID): number {
 
   for (const species of G.speciesInGame) {
     const myPath = bestPathForSpecies(G, playerID, species).score;
+    const myHandPotential = handPotentialForSpecies(G, playerID, species);
     const myProb = scoringRightsProbability(G, playerID, species);
     value += myPath * myProb;
+    // Hand-potential: cards in hand that could form/extend a path. Discounted
+    // because they're not yet committed (might get discarded, displaced, or
+    // never planted before game-end).
+    value += myHandPotential * myProb * 0.5;
 
     for (const otherID of ids) {
       if (otherID === playerID) continue;
@@ -329,11 +384,42 @@ function positionValue(G: ArboretumState, playerID: PlayerID): number {
       const oppProb = scoringRightsProbability(G, otherID, species);
       // Penalize opponent threats — but less heavily than rewarding our own
       // scoring, so the bot prioritizes building its game over blocking.
+      // (We can't see opponent hands so we only count their committed paths.)
       value -= oppPath * oppProb * 0.4;
     }
   }
 
   return value;
+}
+
+/**
+ * The score the player COULD get if they planted just their hand cards of
+ * this species in an optimal same-species ascending path. Approximates the
+ * upside of holding cards we haven't yet planted; doesn't account for layout
+ * constraints, so it's an upper bound and we discount it at the call site.
+ */
+function handPotentialForSpecies(
+  G: ArboretumState,
+  playerID: PlayerID,
+  species: SpeciesId
+): number {
+  const player = G.players[playerID];
+  if (!player) return 0;
+
+  const ranks = new Set<number>();
+  for (const cardID of player.hand) {
+    const card = G.cardsById[cardID];
+    if (card?.species === species) ranks.add(card.rank);
+  }
+  if (ranks.size < 2) return 0;
+
+  const sorted = [...ranks].sort((a, b) => a - b);
+  const length = sorted.length;
+  let score = length; // 1 point per card
+  if (length >= 4) score += length; // same-species run bonus
+  if (sorted[0] === 1) score += 1; // start-with-1 bonus
+  if (sorted[length - 1] === 8) score += 2; // end-with-8 bonus
+  return score;
 }
 
 /**
