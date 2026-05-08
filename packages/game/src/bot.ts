@@ -399,23 +399,57 @@ function simulateMove(
 }
 
 /**
+ * Per-rank multiplier applied to my own scoring contribution per species,
+ * after sorting species by current commitment (cards held + planted)
+ * descending. Encodes the human heuristic of "commit to 1-2 main species":
+ * the top species pays full, the second nearly so, and the long tail
+ * contributes very little. The bot is therefore pressured to deepen its
+ * top picks rather than dabble across every species evenly.
+ */
+const SPECIALIZATION_WEIGHTS = [1.0, 0.8, 0.5, 0.3, 0.2, 0.15, 0.12, 0.1, 0.1, 0.1];
+
+/**
  * Position evaluation: my expected scoring (best path × probability of
- * holding scoring rights) plus discounted hand-potential, minus a fraction
- * of each opponent's expected scoring. Sums across all species in the game.
+ * holding scoring rights) plus discounted hand-potential, weighted by how
+ * specialized I am in each species, minus a fraction of each opponent's
+ * expected scoring. Sums across all species in the game.
  */
 function positionValue(G: ArboretumState, playerID: PlayerID): number {
   const ids = Object.keys(G.players);
-  let value = 0;
+  const player = G.players[playerID];
+  if (!player) return 0;
 
-  for (const species of G.speciesInGame) {
+  // Commitment per species: cards I have in hand + arboretum.
+  const commitment = new Map<SpeciesId, number>();
+  for (const cardID of player.hand) {
+    const card = G.cardsById[cardID];
+    if (card) commitment.set(card.species, (commitment.get(card.species) ?? 0) + 1);
+  }
+  for (const cardID of Object.values(player.arboretum)) {
+    const card = G.cardsById[cardID];
+    if (card) commitment.set(card.species, (commitment.get(card.species) ?? 0) + 1);
+  }
+
+  // Rank species by my commitment so the most-committed get the top
+  // SPECIALIZATION_WEIGHTS slot.
+  const speciesByFocus = G.speciesInGame
+    .slice()
+    .sort((a, b) => (commitment.get(b) ?? 0) - (commitment.get(a) ?? 0));
+
+  let value = 0;
+  speciesByFocus.forEach((species, rank) => {
+    const focus =
+      SPECIALIZATION_WEIGHTS[Math.min(rank, SPECIALIZATION_WEIGHTS.length - 1)];
+
     const myPath = bestPathForSpecies(G, playerID, species).score;
     const myHandPotential = handPotentialForSpecies(G, playerID, species);
     const myProb = scoringRightsProbability(G, playerID, species);
-    value += myPath * myProb;
+
+    value += myPath * myProb * focus;
     // Hand-potential: cards in hand that could form/extend a path. Discounted
     // because they're not yet committed (might get discarded, displaced, or
     // never planted before game-end).
-    value += myHandPotential * myProb * 0.5;
+    value += myHandPotential * myProb * 0.5 * focus;
 
     for (const otherID of ids) {
       if (otherID === playerID) continue;
@@ -424,7 +458,35 @@ function positionValue(G: ArboretumState, playerID: PlayerID): number {
       // Penalize opponent threats — but less heavily than rewarding our own
       // scoring, so the bot prioritizes building its game over blocking.
       // (We can't see opponent hands so we only count their committed paths.)
+      // No focus weight: opponent threats hurt us no matter their species.
       value -= oppPath * oppProb * 0.4;
+    }
+  });
+
+  // High-card hand bonus: explicitly reward holding 7s (uncancellable) and
+  // uncancelled 8s, weighted by species focus. Encodes the human heuristic
+  // that these cards are worth more in hand than planted — a 7 gives no rank
+  // bonus when planted, and an 8 is at risk of cancellation but locks scoring
+  // rights when held.
+  for (const cardID of player.hand) {
+    const card = G.cardsById[cardID];
+    if (!card) continue;
+    const speciesRank = speciesByFocus.indexOf(card.species);
+    const focus =
+      SPECIALIZATION_WEIGHTS[Math.min(speciesRank, SPECIALIZATION_WEIGHTS.length - 1)];
+
+    if (card.rank === 7) {
+      value += 1.0 * focus;
+    } else if (card.rank === 8) {
+      const cancelled = ids.some((otherID) => {
+        if (otherID === playerID) return false;
+        const other = G.players[otherID];
+        return other?.hand.some((id) => {
+          const c = G.cardsById[id];
+          return c?.species === card.species && c.rank === 1;
+        });
+      });
+      if (!cancelled) value += 1.0 * focus;
     }
   }
 
@@ -576,14 +638,22 @@ function scorePlant(
   }
 
   let pathDelta = 0;
+  let activatedSecondary = 0; // count of secondary species this plant grows
   for (const species of relevantSpecies) {
     const before = bestPathForSpecies(G, playerID, species).score;
     const after = bestPathForSpecies(simulatedG, playerID, species).score;
-    const weight = species === card.species ? 4 : 2;
-    pathDelta += (after - before) * weight;
+    const weight = species === card.species ? 4 : 4; // piggyback equally valued
+    const delta = (after - before) * weight;
+    pathDelta += delta;
+    if (species !== card.species && after > before) activatedSecondary += 1;
   }
 
   let score = pathDelta;
+
+  // Multi-species "double duty" bonus: plants that simultaneously grow paths
+  // for two or more species are uniquely valuable (they're piggyback cards
+  // earning points across multiple scoring races at once).
+  if (activatedSecondary >= 1) score += 1.5 * activatedSecondary;
 
   // Small bonuses for cards that set up future scoring (start/end bonuses).
   if (card.rank === 1 && hasSpeciesPlanted(G, playerID, card.species)) score += 0.5;
@@ -614,6 +684,10 @@ function scoreDiscard(
   if (card.rank === 1 && planted) score -= 5;
   // Rank-8 of a planted species: also valuable
   if (card.rank === 8 && planted) score -= 4;
+  // Rank-7s are uncancellable hand-sum gold. Keep them regardless of whether
+  // we've planted the species yet — they're high-rank scoring-rights anchors.
+  if (card.rank === 7) score -= 3;
+  if (card.rank === 7 && planted) score -= 1;
   // Cards of species I'm building: keep
   if (planted) score -= 2;
   // Plenty of this species in hand → can spare one
