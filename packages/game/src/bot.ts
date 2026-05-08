@@ -220,17 +220,56 @@ function scoreActionWithLookahead(
     return scoreAction(G, playerID, action);
   }
 
-  // 2-ply: anticipate each opponent's best plant in turn order.
+  // 2-ply: anticipate each opponent's best response in turn order. We model
+  // their response as the best (optional draw-from-discard) + best plant
+  // combination — capturing the common "they'll just pick up what I
+  // discarded and slot it into their path" threat.
   let state: ArboretumState = simulated;
   const ids = Object.keys(state.players);
   const myIdx = Number(playerID);
   for (let offset = 1; offset < ids.length; offset += 1) {
     const opponentID = String((myIdx + offset) % ids.length);
-    const afterOpp = simulateBestOpponentPlant(state, opponentID);
+    const afterOpp = simulateBestOpponentResponse(state, opponentID);
     if (afterOpp !== null) state = afterOpp;
   }
 
   return positionValue(state, playerID);
+}
+
+/**
+ * Find the opponent's strongest response: either their best plant from
+ * their current hand, or the best (drawFromDiscard + plant) combination
+ * across all available discard piles. Returns the resulting state.
+ */
+function simulateBestOpponentResponse(
+  G: ArboretumState,
+  opponentID: PlayerID
+): ArboretumState | null {
+  let bestState: ArboretumState | null = null;
+  let bestValue = -Infinity;
+
+  const evaluate = (state: ArboretumState | null) => {
+    if (!state) return;
+    const v = positionValue(state, opponentID);
+    if (v > bestValue) {
+      bestValue = v;
+      bestState = state;
+    }
+  };
+
+  // Option A: plant from current hand
+  evaluate(simulateBestOpponentPlant(G, opponentID));
+
+  // Option B: draw from any non-empty discard pile, then plant
+  for (const sourceID of Object.keys(G.players)) {
+    const source = G.players[sourceID];
+    if (source.discard.length === 0) continue;
+    const afterDraw = simulateMove(G, opponentID, "drawFromDiscard", [sourceID]);
+    if (!afterDraw) continue;
+    evaluate(simulateBestOpponentPlant(afterDraw, opponentID));
+  }
+
+  return bestState;
 }
 
 /**
@@ -423,10 +462,13 @@ function handPotentialForSpecies(
 }
 
 /**
- * Heuristic probability that `playerID` will hold scoring rights for
- * `species` given the current hand sums. Treats clear leads as ~certain,
- * ties as shared, and trailing as ~impossible (a coarse approximation that
- * captures the dominant strategic dynamic without modeling future draws).
+ * Continuous probability estimate that `playerID` holds scoring rights for
+ * `species` at game end. Computed as a sigmoid on the gap between my
+ * adjusted hand sum and the highest opponent sum — so a 0-point lead reads
+ * as ~50/50 and the curve flattens toward 0.85 / 0.15 by ±3 points,
+ * approaching certainty thereafter. Captures the reality that close races
+ * can swing either way during remaining turns rather than collapsing to a
+ * binary leader/loser determination.
  */
 function scoringRightsProbability(
   G: ArboretumState,
@@ -440,13 +482,15 @@ function scoringRightsProbability(
   if (allZero) return 1.0; // no one holds the species → everyone scores it
 
   const mySum = sums[playerID] ?? 0;
-  if (mySum === 0) return 0.0;
+  const otherSums = ids
+    .filter((id) => id !== playerID)
+    .map((id) => sums[id] ?? 0);
+  const maxOther = otherSums.length > 0 ? Math.max(...otherSums) : 0;
 
-  const max = Math.max(...ids.map((id) => sums[id] ?? 0));
-  if (mySum < max) return 0.0;
-
-  const tied = ids.filter((id) => (sums[id] ?? 0) === max).length;
-  return 1.0 / tied;
+  // Sigmoid on the lead gap. Steepness 1/2 picked so a ±3-point gap reads as
+  // ~0.85 / 0.15 — strong but not certain.
+  const gap = mySum - maxOther;
+  return 1 / (1 + Math.exp(-gap / 2));
 }
 
 // --- per-move heuristics ---
